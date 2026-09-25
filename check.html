@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nav check</title>
+<style>
+html,body{margin:0;padding:0;background:#000;color:#fff}
+body{font-family:sans-serif;font-size:18px;line-height:1.3;padding:6px 6px 40px;word-wrap:break-word;overflow-wrap:break-word}
+h1{font-size:22px;margin:4px 0 6px}
+h2{font-size:20px;color:#ffc400;margin:22px 0 6px;padding-top:10px;border-top:2px solid #555}
+p{margin:6px 0}
+.row{margin:3px 0}
+.k{color:#aaa}
+.v{font-weight:bold}
+.ok{color:#5be37d}
+.bad{color:#ff7a7a}
+.warn{color:#ffc400}
+.note{color:#bbb;font-size:16px}
+button,a.btn{display:block;width:100%;box-sizing:border-box;margin:8px 0;padding:12px 6px;font-weight:bold;font-size:20px;font-family:sans-serif;color:#000;background:#fff;border:3px solid #fff;border-radius:6px;text-align:center;text-decoration:none}
+button:focus,a.btn:focus,input:focus{background:#ffc400;border-color:#ffc400;color:#000;outline:3px solid #fff;outline-offset:1px}
+textarea:focus{border-color:#ffc400;outline:3px solid #fff}
+button.sz{background:#000;color:#fff;border-color:#666;padding:6px 4px;line-height:1.1}
+button.sz.picked{border-color:#5be37d}
+input,textarea{display:block;width:100%;box-sizing:border-box;font-size:18px;padding:8px;background:#222;color:#fff;border:3px solid #666;border-radius:6px;margin:6px 0}
+textarea{font-size:13px;font-family:monospace;height:9em}
+#log{font-family:monospace;font-size:14px;color:#ccc}
+#ko{display:none;position:fixed;left:0;top:0;right:0;bottom:0;background:#000;z-index:9;padding:8px;overflow:hidden}
+#koPrompt{font-size:30px;font-weight:bold;color:#ffc400;margin:10px 0;line-height:1.15}
+#koCount{font-size:26px}
+.glyphs{font-size:30px;line-height:1.7}
+.glyphs span{display:inline-block;margin-right:12px;white-space:nowrap}
+.glyphs b{font-size:14px;color:#aaa;margin-right:3px}
+.arrows svg,.arrows canvas{vertical-align:middle;margin-right:12px}
+</style>
+</head>
+<body>
+<script>
+window.onerror = function (m, s, l) {
+  var b = document.getElementById('errBox');
+  if (b) { b.innerHTML += '<p class="bad">Script error: ' + String(m).replace(/</g, '&lt;') + ' (line ' + l + ')</p>'; }
+};
+</script>
+
+<h1>Nav check for the TCL Classic</h1>
+<p id="jsState" class="bad">JavaScript is not running.</p>
+<div id="errBox"></div>
+<p class="note" id="restoredNote"></p>
+<p class="note">Work top to bottom. Results save on the phone as you go, so a reload won't lose them.</p>
+<a class="btn" href="#send">Jump to results</a>
+
+<h2>1. Screen</h2>
+<p class="note">Measured automatically.</p>
+<div id="scrOut"></div>
+
+<h2>2. Location</h2>
+<p class="note">Do this outside or by a window. Allow location when the browser asks.</p>
+<button type="button" id="btnFix">Test location</button>
+<p id="geoStatus"></p>
+<div id="geoOut"></div>
+<p class="note">GPS watch: start it, walk or ride for about a minute, then close the flip for 30 seconds and open it again. Then stop it.</p>
+<button type="button" id="btnWatch">Start GPS watch</button>
+<div id="watchOut"></div>
+
+<h2>3. Keys</h2>
+<p class="note">The screen will ask for one key at a time. If your phone doesn't have that key, wait and it skips after 8 seconds.</p>
+<button type="button" id="btnKeys">Start key test</button>
+<div id="gkOut"></div>
+<p class="note">After the key test, press UP and DOWN a few times on this page so it can see how the D-pad normally behaves.</p>
+<div id="keyOut"></div>
+<div id="log"></div>
+
+<h2>4. Readability</h2>
+<p class="note">Hold the phone where it would sit while you travel. Select the smallest line you can read in a one-second glance.</p>
+<div id="sizes"></div>
+<p class="note">Arrow shapes. You should see two yellow arrows, one turning left and one turning right:</p>
+<div class="arrows">
+<svg width="64" height="64" viewBox="0 0 64 64"><path d="M50 62 L38 62 L38 32 Q38 28 34 28 L26 28 L26 40 L6 22 L26 4 L26 16 L34 16 Q50 16 50 32 Z" fill="#ffc400"/></svg><canvas id="cv" width="64" height="64"></canvas>
+</div>
+<p class="note">Arrow characters. Type the letters of any that show as a box, a blank, or a question mark:</p>
+<div class="glyphs">
+<span><b>A</b>&#8592;</span><span><b>B</b>&#8594;</span><span><b>C</b>&#8593;</span><span><b>D</b>&#8624;</span><span><b>E</b>&#8625;</span><span><b>F</b>&#8630;</span><span><b>G</b>&#8631;</span><span><b>H</b>&#11013;</span><span><b>J</b>&#10145;</span><span><b>K</b>&#11014;</span><span><b>L</b>&#10548;</span><span><b>M</b>&#11148;</span>
+</div>
+<input type="text" id="glyphBad" autocomplete="off" placeholder="e.g. DEM (blank if all fine)">
+
+<h2>5. Voice, screen, vibration</h2>
+<p class="note">Turn the ringer volume up first. You should hear a sentence.</p>
+<button type="button" id="btnVoice">Test voice</button>
+<p class="note">Keep screen on: press it, then leave the phone open and untouched for longer than its normal screen timeout.</p>
+<button type="button" id="btnWake">Keep screen on</button>
+<button type="button" id="btnVib">Vibrate</button>
+<div id="avOut"></div>
+
+<h2>6. Route service</h2>
+<p class="note">Checks that this browser can reach the free map services the navigator would use.</p>
+<button type="button" id="btnNet">Test route service</button>
+<div id="netOut"></div>
+
+<h2>7. Browser features</h2>
+<p class="note">Measured automatically.</p>
+<div id="featOut"></div>
+
+<h2 id="send">8. Send results</h2>
+<p class="note">Text them to your email address (type the address in the To field), then paste them to Claude. Or take photos of this box.</p>
+<button type="button" id="btnShare">Share results</button>
+<a class="btn" id="lnkSms" href="#">Text results</a>
+<a class="btn" id="lnkMail" href="#">Email results</a>
+<textarea id="sum" readonly></textarea>
+<button type="button" id="btnClear">Clear saved results</button>
+
+<div id="ko">
+<p class="note" id="koStep"></p>
+<p id="koPrompt"></p>
+<p id="koCount"></p>
+<div class="note" id="koGot"></div>
+<button type="button" id="koStop">Stop key test</button>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- helpers ---------- */
+  function $(id) { return document.getElementById(id); }
+  function t() { return new Date().getTime(); }
+  function pnow() { return (window.performance && performance.now) ? performance.now() : t(); }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function set(id, html) { var e = $(id); if (e) { e.innerHTML = html; } }
+  function row(k, v, cls) {
+    return '<div class="row"><span class="k">' + k + ':</span> <span class="v' + (cls ? ' ' + cls : '') + '">' + v + '</span></div>';
+  }
+  function yn(x) {
+    if (x === 1 || x === true) { return '<span class="ok">yes</span>'; }
+    if (x === 0 || x === false) { return '<span class="bad">no</span>'; }
+    return esc(x);
+  }
+  function num(x, d) {
+    if (x === null || x === undefined || isNaN(x)) { return 'none'; }
+    var m = Math.pow(10, d || 0);
+    return String(Math.round(x * m) / m);
+  }
+  function on(el, ev, fn) { if (el) { el.addEventListener(ev, fn, false); } }
+
+  /* ---------- saved state ---------- */
+  var STORE = 'navcheck1';
+  var R = {};
+  var restoredAt = null;
+  try {
+    var saved = window.localStorage ? localStorage.getItem(STORE) : null;
+    if (saved) { R = JSON.parse(saved) || {}; restoredAt = R.savedAt || null; }
+  } catch (e0) { R = {}; }
+  R.ver = 1;
+
+  function save() {
+    try { R.savedAt = t(); localStorage.setItem(STORE, JSON.stringify(R)); } catch (e) { }
+  }
+  var rT = null;
+  function upd() {
+    if (rT) { return; }
+    rT = setTimeout(function () { rT = null; renderAll(); save(); }, 150);
+  }
+
+  $('jsState').className = 'ok';
+  $('jsState').innerHTML = 'JavaScript is running.';
+  if (restoredAt) {
+    set('restoredNote', 'Showing results saved ' + esc(new Date(restoredAt).toLocaleString()) + '. Any test you re-run replaces its old result.');
+  }
+
+  /* ---------- 1. screen ---------- */
+  var vpSeen = {};
+  if (R.vpSeen) {
+    var vps = String(R.vpSeen).split(',');
+    for (var vi = 0; vi < vps.length; vi++) { if (vps[vi]) { vpSeen[vps[vi]] = 1; } }
+  }
+  function mq(q) {
+    try { return window.matchMedia ? (window.matchMedia(q).matches ? 1 : 0) : 'n/a'; } catch (e) { return 'err'; }
+  }
+  function measure() {
+    var de = document.documentElement, vv = window.visualViewport, o = 'n/a';
+    if (screen.orientation && screen.orientation.type) { o = screen.orientation.type; }
+    else if (typeof window.orientation !== 'undefined') { o = String(window.orientation); }
+    R.scr = {
+      iw: window.innerWidth, ih: window.innerHeight,
+      ow: window.outerWidth, oh: window.outerHeight,
+      cw: de.clientWidth, ch: de.clientHeight,
+      sw: screen.width, sh: screen.height,
+      saw: screen.availWidth, sah: screen.availHeight,
+      dpr: window.devicePixelRatio,
+      vvw: vv ? Math.round(vv.width) : null, vvh: vv ? Math.round(vv.height) : null,
+      o: o
+    };
+    vpSeen[R.scr.iw + 'x' + R.scr.ih] = 1;
+    R.vpSeen = Object.keys(vpSeen).join(',');
+    R.ptr = {
+      fine: mq('(pointer: fine)'), coarse: mq('(pointer: coarse)'), none: mq('(pointer: none)'),
+      hover: mq('(hover: hover)'), touch: ('ontouchstart' in window) ? 1 : 0,
+      mtp: navigator.maxTouchPoints || 0
+    };
+  }
+  on(window, 'resize', function () { measure(); upd(); });
+  on(window, 'orientationchange', function () { measure(); upd(); });
+  if (window.visualViewport) { on(window.visualViewport, 'resize', function () { measure(); upd(); }); }
+
+  function renderScreen() {
+    var s = R.scr, p = R.ptr;
+    set('scrOut',
+      row('Page area', s.iw + ' x ' + s.ih) +
+      row('Document area', s.cw + ' x ' + s.ch) +
+      row('Browser window', s.ow + ' x ' + s.oh) +
+      row('Screen', s.sw + ' x ' + s.sh) +
+      row('Screen available', s.saw + ' x ' + s.sah) +
+      row('Pixel ratio', esc(s.dpr)) +
+      row('Visual viewport', s.vvw === null ? 'n/a' : s.vvw + ' x ' + s.vvh) +
+      row('Orientation', esc(s.o)) +
+      row('Page sizes seen', esc(R.vpSeen)) +
+      row('Pointer fine / coarse / none', p.fine + ' / ' + p.coarse + ' / ' + p.none) +
+      row('Hover / touch', p.hover + ' / ' + p.touch + ' (' + p.mtp + ')')
+    );
+  }
+
+  /* ---------- 2. location ---------- */
+  var geo = navigator.geolocation || null;
+  R.geo = R.geo || {};
+  R.geo.api = geo ? 1 : 0;
+  R.geo.sec = window.isSecureContext === true ? 1 : (window.isSecureContext === false ? 0 : 'unknown');
+  R.geo.proto = location.protocol;
+
+  function permCheck() {
+    if (!navigator.permissions || !navigator.permissions.query) { R.geo.perm = 'no permissions API'; upd(); return; }
+    try {
+      navigator.permissions.query({ name: 'geolocation' }).then(function (ps) {
+        R.geo.perm = ps.state; upd();
+        ps.onchange = function () { R.geo.perm = ps.state; upd(); };
+      }, function () { R.geo.perm = 'query failed'; upd(); });
+    } catch (e) { R.geo.perm = 'query error'; upd(); }
+  }
+
+  function geoHelp(code) {
+    if (code === 1) { return 'Location permission is blocked. Allow location for this site in the browser\'s settings, make sure Location is on in the phone\'s settings, then reload this page and try again.'; }
+    if (code === 2) { return 'The phone could not get a position. Make sure Location is on in the phone\'s settings, then try outside.'; }
+    if (code === 3) { return 'No position within 60 seconds. Go outside with open sky and try again. A first GPS fix can take a couple of minutes.'; }
+    return 'Location failed.';
+  }
+
+  var fixTick = null;
+  function testFix() {
+    if (!geo) { set('geoStatus', '<span class="bad">This browser has no location API.</span>'); return; }
+    var p0 = pnow(), started = t();
+    clearInterval(fixTick);
+    set('geoStatus', '<span class="warn">Finding GPS... 0 s</span>');
+    fixTick = setInterval(function () {
+      set('geoStatus', '<span class="warn">Finding GPS... ' + Math.round((t() - started) / 1000) + ' s</span>');
+    }, 1000);
+    try {
+      geo.getCurrentPosition(function (pos) {
+        clearInterval(fixTick);
+        var c = pos.coords;
+        R.fix = {
+          lat: c.latitude, lon: c.longitude, acc: Math.round(c.accuracy),
+          alt: c.altitude, hdg: c.heading, spd: c.speed,
+          ttf: Math.round((pnow() - p0) / 100) / 10,
+          age: Math.round((t() - pos.timestamp) / 1000)
+        };
+        R.geoErr = null;
+        set('geoStatus', '<span class="ok">Location found.</span>');
+        permCheck(); upd();
+      }, function (err) {
+        clearInterval(fixTick);
+        R.geoErr = { code: err.code, msg: err.message, after: Math.round((pnow() - p0) / 1000) };
+        set('geoStatus', '<span class="bad">Location failed.</span>');
+        permCheck(); upd();
+      }, { enableHighAccuracy: true, timeout: 60000, maximumAge: 0 });
+    } catch (e) {
+      clearInterval(fixTick);
+      R.geoErr = { code: -1, msg: 'threw: ' + e.message, after: 0 };
+      upd();
+    }
+  }
+
+  function renderGeo() {
+    var g = R.geo, h = '';
+    h += row('Location API', yn(g.api));
+    h += row('Secure page', yn(g.sec) + ' (' + esc(g.proto) + ')');
+    if (g.sec === 0) { h += '<p class="bad">This page is not on https, so the browser will likely block location.</p>'; }
+    h += row('Permission', esc(g.perm || 'checking'));
+    if (R.fix) {
+      var f = R.fix;
+      h += row('Latitude', num(f.lat, 5)) + row('Longitude', num(f.lon, 5));
+      h += row('Accuracy', f.acc + ' m', f.acc <= 30 ? 'ok' : (f.acc <= 100 ? 'warn' : 'bad'));
+      h += row('Time to fix', f.ttf + ' s') + row('Fix age', f.age + ' s');
+      h += row('Speed / heading / altitude', num(f.spd, 1) + ' / ' + num(f.hdg) + ' / ' + num(f.alt));
+    }
+    if (R.geoErr) {
+      h += '<p class="bad">' + esc(geoHelp(R.geoErr.code)) + '</p>';
+      h += '<p class="note">Error ' + esc(R.geoErr.code) + ': ' + esc(R.geoErr.msg) + ' (after ' + R.geoErr.after + ' s)</p>';
+    }
+    set('geoOut', h);
+  }
+
+  /* ---------- GPS watch + screen-off tracking ---------- */
+  R.vis = R.vis || { hid: 0, longest: 0 };
+  var hidStart = null, hidSpans = [];
+  function inHidden(ts) {
+    if (hidStart !== null && ts >= hidStart) { return true; }
+    for (var i = 0; i < hidSpans.length; i++) {
+      if (ts >= hidSpans[i][0] && ts <= hidSpans[i][1]) { return true; }
+    }
+    return false;
+  }
+
+  var watchId = null, lastFixT = null, sumGap = 0;
+  function toggleWatch() {
+    if (!geo) { set('watchOut', '<span class="bad">This browser has no location API.</span>'); return; }
+    if (watchId !== null) {
+      geo.clearWatch(watchId); watchId = null;
+      R.watch.running = 0;
+      $('btnWatch').innerHTML = 'Start GPS watch';
+      upd(); return;
+    }
+    R.watch = { running: 1, n: 0, avg: null, maxGap: 0, acc: null, best: null, spdN: 0, hdgN: 0, errs: 0, lastErr: '', hidTaken: 0, hidRun: 0, spd: null, hdg: null };
+    R.vis = { hid: 0, longest: 0 };
+    hidSpans = []; lastFixT = null; sumGap = 0;
+    var W = R.watch;
+    try {
+      watchId = geo.watchPosition(function (pos) {
+        var now = t(), c = pos.coords;
+        W.n++;
+        if (document.hidden) { W.hidRun++; }
+        if (inHidden(pos.timestamp)) { W.hidTaken++; }
+        if (lastFixT !== null) {
+          var gap = (now - lastFixT) / 1000;
+          sumGap += gap;
+          W.avg = Math.round(sumGap / (W.n - 1) * 10) / 10;
+          if (gap > W.maxGap) { W.maxGap = Math.round(gap); }
+        }
+        lastFixT = now;
+        W.acc = Math.round(c.accuracy);
+        if (W.best === null || c.accuracy < W.best) { W.best = Math.round(c.accuracy); }
+        if (c.speed !== null && !isNaN(c.speed)) { W.spdN++; W.spd = c.speed; }
+        if (c.heading !== null && !isNaN(c.heading)) { W.hdgN++; W.hdg = c.heading; }
+        upd();
+      }, function (err) {
+        W.errs++; W.lastErr = err.code + ' ' + err.message; upd();
+      }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+      $('btnWatch').innerHTML = 'Stop GPS watch';
+    } catch (e) {
+      W.errs++; W.lastErr = 'threw: ' + e.message;
+    }
+    upd();
+  }
+
+  function renderWatch() {
+    var W = R.watch;
+    if (!W) { set('watchOut', '<p class="note">Not started.</p>'); return; }
+    var h = '';
+    h += row('Status', W.running && watchId !== null ? '<span class="ok">running</span>' : 'stopped');
+    h += row('Updates', W.n);
+    h += row('Average gap', W.avg === null ? 'none' : W.avg + ' s');
+    h += row('Longest gap', W.maxGap + ' s', W.maxGap > 10 ? 'warn' : '');
+    h += row('Accuracy now / best', num(W.acc) + ' / ' + num(W.best) + ' m');
+    h += row('Updates with speed', W.spdN + (W.spd !== null ? ' (last ' + num(W.spd * 2.23694, 1) + ' mph)' : ''));
+    h += row('Updates with heading', W.hdgN + (W.hdg !== null ? ' (last ' + num(W.hdg) + ')' : ''));
+    h += row('Screen hidden', R.vis.hid + ' time(s), longest ' + R.vis.longest + ' s');
+    h += row('Fixes taken while hidden', W.hidTaken);
+    h += row('Fixes delivered while hidden', W.hidRun);
+    h += row('Errors', W.errs + (W.lastErr ? ' (' + esc(W.lastErr) + ')' : ''), W.errs ? 'warn' : '');
+    set('watchOut', h);
+  }
+
+  /* ---------- 3. keys ---------- */
+  var K = R.keys || {};
+  R.keys = K;
+  K.n = K.n || 0; K.arrows = K.arrows || 0; K.spatial = K.spatial || 0; K.scrolls = K.scrolls || 0;
+  K.mouse = 0; K.touch = 0;
+  K.seen = K.seen || {};
+  R.gk = R.gk || {};
+  var logLines = [];
+  var lastArrowT = 0, scrollY0 = 0;
+
+  function keyId(e) {
+    return (e.key === undefined ? '?' : (e.key === ' ' ? 'Space' : e.key)) + '/' + (e.code || '-') + '/' + (e.keyCode || e.which || 0);
+  }
+  function isArrow(e) {
+    var k = e.key;
+    return k === 'ArrowUp' || k === 'ArrowDown' || k === 'ArrowLeft' || k === 'ArrowRight' ||
+      k === 'Up' || k === 'Down' || k === 'Left' || k === 'Right' ||
+      (e.keyCode >= 37 && e.keyCode <= 40);
+  }
+  function logKey(type, e) {
+    logLines.unshift(type + ' ' + keyId(e));
+    if (logLines.length > 6) { logLines.pop(); }
+  }
+  function checkScroll() {
+    var y = window.pageYOffset || document.documentElement.scrollTop || 0;
+    if (y !== scrollY0) { K.scrolls++; }
+    upd();
+  }
+
+  document.addEventListener('keydown', function (e) {
+    K.n++;
+    K.seen[keyId(e)] = 1;
+    logKey('down', e);
+    if (guided) { guidedKey(e, 'down'); return; }
+    if (isArrow(e)) {
+      K.arrows++;
+      lastArrowT = t();
+      scrollY0 = window.pageYOffset || document.documentElement.scrollTop || 0;
+      setTimeout(checkScroll, 400);
+    }
+    upd();
+  }, true);
+  document.addEventListener('keyup', function (e) {
+    logKey('up', e);
+    if (guided) { guidedKey(e, 'up'); return; }
+    upd();
+  }, true);
+  document.addEventListener('focusin', function () {
+    if (t() - lastArrowT < 500) { K.spatial++; upd(); }
+  }, true);
+  document.addEventListener('mousemove', function () {
+    K.mouse++;
+    if (K.mouse === 1 || K.mouse % 25 === 0) { upd(); }
+  }, true);
+  document.addEventListener('touchstart', function () { K.touch++; upd(); }, true);
+
+  /* guided key mapping */
+  var STEPS = [
+    ['up', 'UP on the D-pad'],
+    ['down', 'DOWN on the D-pad'],
+    ['left', 'LEFT on the D-pad'],
+    ['right', 'RIGHT on the D-pad'],
+    ['ok', 'OK (the center button)'],
+    ['softL', 'the key to the upper left of the D-pad'],
+    ['softR', 'the key to the upper right of the D-pad'],
+    ['k1', 'the 1 key'],
+    ['k5', 'the 5 key'],
+    ['k0', 'the 0 key'],
+    ['star', 'the * key'],
+    ['hash', 'the # key'],
+    ['back', 'BACK / CLEAR. This one may close the page. If it does, open it again.']
+  ];
+  var guided = false, gi = 0, gTimer = null, gTick = null, gLock = false, gStart = 0, gLastId = '';
+
+  function startGuided() {
+    R.gk = {};
+    R.gkNote = '';
+    guided = true; gi = 0; gLastId = '';
+    if (document.activeElement && document.activeElement.blur) { document.activeElement.blur(); }
+    $('ko').style.display = 'block';
+    nextStep();
+  }
+  function endGuided(msg) {
+    clearTimeout(gTimer); clearInterval(gTick);
+    guided = false;
+    R.gkPending = 0;
+    $('ko').style.display = 'none';
+    if (msg) { R.gkNote = msg; }
+    upd();
+    var b = $('btnKeys'); if (b && b.focus) { b.focus(); }
+  }
+  function nextStep() {
+    clearTimeout(gTimer); clearInterval(gTick);
+    gLock = false;
+    if (gi >= STEPS.length) { endGuided('Completed.'); return; }
+    if (gi === 3 && R.gk.up === 'none' && R.gk.down === 'none' && R.gk.left === 'none') {
+      endGuided('Stopped early: no keys reached the page. The browser is probably using an on-screen cursor.');
+      return;
+    }
+    var s = STEPS[gi];
+    R.gkPending = s[0] === 'back' ? 1 : 0;
+    save();
+    gStart = t();
+    set('koStep', 'Key ' + (gi + 1) + ' of ' + STEPS.length);
+    set('koPrompt', 'Press ' + esc(s[1]));
+    var left = 8;
+    set('koCount', left + ' s');
+    gTick = setInterval(function () { left--; set('koCount', (left < 0 ? 0 : left) + ' s'); }, 1000);
+    gTimer = setTimeout(function () {
+      if (R.gk[s[0]] === undefined) { R.gk[s[0]] = 'none'; }
+      gi++; nextStep();
+    }, 8000);
+    set('koGot', gotText());
+  }
+  function guidedKey(e, type) {
+    if (e.preventDefault) { e.preventDefault(); }
+    if (gLock || gi >= STEPS.length) { return; }
+    var id = keyId(e);
+    if (type === 'up') {
+      if (t() - gStart < 700) { return; }   /* release of the key that started this step */
+      if (id === gLastId) { return; }
+    }
+    var s = STEPS[gi];
+    gLock = true;
+    gLastId = id;
+    R.gk[s[0]] = (type === 'up' ? 'up-only ' : '') + id;
+    R.gkPending = 0;
+    clearTimeout(gTimer); clearInterval(gTick);
+    set('koCount', '<span class="ok">Got it: ' + esc(id) + '</span>');
+    setTimeout(function () { gi++; nextStep(); }, 600);
+  }
+  function backLeft() {
+    if (guided && STEPS[gi] && STEPS[gi][0] === 'back' && !R.gk.back) {
+      R.gk.back = 'left the page';
+      R.gkPending = 0;
+      save();
+      endGuided('Completed.');
+    }
+  }
+  on(window, 'pagehide', backLeft);
+  on(window, 'pageshow', function (e) { if (e.persisted && guided) { endGuided('Completed.'); } });
+  if (R.gkPending === 1) { R.gk.back = 'left the page'; R.gkPending = 0; R.gkNote = 'Completed.'; }
+
+  function gotText() {
+    var h = '';
+    for (var i = 0; i < STEPS.length; i++) {
+      var v = R.gk[STEPS[i][0]];
+      if (v !== undefined) { h += esc(STEPS[i][0]) + ': ' + esc(v) + '<br>'; }
+    }
+    return h;
+  }
+
+  function renderKeys() {
+    var h = '', i, v;
+    if (R.gkNote || R.gk.up !== undefined) {
+      for (i = 0; i < STEPS.length; i++) {
+        v = R.gk[STEPS[i][0]];
+        h += row(esc(STEPS[i][0]), v === undefined ? 'not tested' : esc(v), v === 'none' ? 'bad' : '');
+      }
+      if (R.gkNote) { h += '<p class="note">' + esc(R.gkNote) + '</p>'; }
+    } else {
+      h = '<p class="note">Not run yet.</p>';
+    }
+    set('gkOut', h);
+    set('keyOut',
+      row('Key presses seen', K.n) +
+      row('Arrow presses reaching page', K.arrows) +
+      row('Arrow moved focus', K.spatial) +
+      row('Arrow scrolled page', K.scrolls) +
+      row('Pointer moves (cursor mode)', K.mouse) +
+      row('Touches', K.touch)
+    );
+    set('log', logLines.length ? esc(logLines.join('\n')).replace(/\n/g, '<br>') : '');
+  }
+
+  on($('koStop'), 'click', function () { endGuided('Stopped by hand at step ' + (gi + 1) + '.'); });
+
+  /* ---------- 4. readability ---------- */
+  var SIZES = [20, 28, 36, 48, 64];
+  (function () {
+    var h = '';
+    for (var i = 0; i < SIZES.length; i++) {
+      h += '<button type="button" class="sz" data-size="' + SIZES[i] + '" style="font-size:' + SIZES[i] + 'px">' + SIZES[i] + 'px Main St</button>';
+    }
+    set('sizes', h);
+    var bs = $('sizes').getElementsByTagName('button');
+    for (var j = 0; j < bs.length; j++) {
+      on(bs[j], 'click', function () { R.read = this.getAttribute('data-size'); upd(); });
+    }
+  })();
+  function renderSizes() {
+    var bs = $('sizes').getElementsByTagName('button');
+    for (var i = 0; i < bs.length; i++) {
+      bs[i].className = 'sz' + (R.read === bs[i].getAttribute('data-size') ? ' picked' : '');
+    }
+  }
+
+  var cv = $('cv'), ctx = null;
+  try { ctx = cv && cv.getContext ? cv.getContext('2d') : null; } catch (e1) { ctx = null; }
+  if (ctx) {
+    ctx.translate(64, 0); ctx.scale(-1, 1);
+    ctx.fillStyle = '#ffc400';
+    ctx.beginPath();
+    ctx.moveTo(50, 62); ctx.lineTo(38, 62); ctx.lineTo(38, 32);
+    ctx.quadraticCurveTo(38, 28, 34, 28); ctx.lineTo(26, 28); ctx.lineTo(26, 40);
+    ctx.lineTo(6, 22); ctx.lineTo(26, 4); ctx.lineTo(26, 16); ctx.lineTo(34, 16);
+    ctx.quadraticCurveTo(50, 16, 50, 32);
+    ctx.closePath(); ctx.fill();
+  }
+
+  var gIn = $('glyphBad');
+  R.inp = R.inp || { n: 0, k229: 0, last: '' };
+  if (R.glyphBad) { gIn.value = R.glyphBad; }
+  on(gIn, 'input', function () { R.inp.n++; R.glyphBad = gIn.value; upd(); });
+  on(gIn, 'keydown', function (e) { if (e.keyCode === 229) { R.inp.k229++; } R.inp.last = keyId(e); });
+
+  /* ---------- 5. voice / wake / vibrate ---------- */
+  R.sp = R.sp || {};
+  R.sp.api = ('speechSynthesis' in window && typeof window.SpeechSynthesisUtterance !== 'undefined') ? 1 : 0;
+  function countVoices() {
+    try { R.sp.voices = window.speechSynthesis.getVoices().length; } catch (e) { R.sp.voices = 'err'; }
+  }
+  if (!R.sp.api) { R.sp.voices = 0; }
+  if (R.sp.api) {
+    countVoices();
+    try { window.speechSynthesis.onvoiceschanged = function () { countVoices(); upd(); }; } catch (e2) { }
+  }
+  function testVoice() {
+    if (!R.sp.api) { R.sp.res = 'not supported'; upd(); return; }
+    var u = new window.SpeechSynthesisUtterance('In five hundred feet, turn left onto Main Street.');
+    R.sp.res = 'queued';
+    u.onstart = function () { R.sp.res = 'started'; upd(); };
+    u.onend = function () { R.sp.res = 'finished'; upd(); };
+    u.onerror = function (ev) { R.sp.res = 'error: ' + (ev && ev.error ? ev.error : 'unknown'); upd(); };
+    try { window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); }
+    catch (e) { R.sp.res = 'threw: ' + e.message; }
+    setTimeout(function () { if (R.sp.res === 'queued') { R.sp.res = 'never started (5 s)'; upd(); } }, 5000);
+    upd();
+  }
+
+  var wakeLock = null;
+  function testWake() {
+    if (!('wakeLock' in navigator)) { R.wake = 'not supported'; upd(); return; }
+    try {
+      navigator.wakeLock.request('screen').then(function (lock) {
+        wakeLock = lock;
+        R.wake = 'active';
+        lock.addEventListener('release', function () { R.wake = 'released'; wakeLock = null; upd(); });
+        upd();
+      }, function (err) { R.wake = 'failed: ' + (err && err.name ? err.name : 'error'); upd(); });
+    } catch (e) { R.wake = 'threw: ' + e.message; }
+    upd();
+  }
+
+  function testVib() {
+    if (typeof navigator.vibrate !== 'function') { R.vib = 'not supported'; }
+    else {
+      try { R.vib = navigator.vibrate([300, 150, 300]) ? 'accepted' : 'refused'; }
+      catch (e) { R.vib = 'threw: ' + e.message; }
+    }
+    upd();
+  }
+
+  function renderAV() {
+    set('avOut',
+      row('Voice API', yn(R.sp.api) + (R.sp.api ? ' (' + esc(R.sp.voices) + ' voices)' : '')) +
+      row('Voice test', esc(R.sp.res || 'not run')) +
+      row('Keep screen on', esc(R.wake || 'not run')) +
+      row('Vibrate', esc(R.vib || 'not run'))
+    );
+  }
+
+  /* ---------- 6. route service ---------- */
+  R.net = R.net || {};
+  function xget(url, hdrs, cb) {
+    var x, p0 = pnow(), done = false;
+    function fin(status, text) {
+      if (done) { return; }
+      done = true;
+      cb(status, text, Math.round(pnow() - p0));
+    }
+    try {
+      x = new XMLHttpRequest();
+      x.open('GET', url, true);
+      for (var h in hdrs) { if (hdrs.hasOwnProperty(h)) { x.setRequestHeader(h, hdrs[h]); } }
+      x.timeout = 15000;
+      x.onreadystatechange = function () { if (x.readyState === 4) { fin(x.status, x.responseText); } };
+      x.ontimeout = function () { fin(-1, ''); };
+      x.send();
+    } catch (e) { fin(-2, e.message); }
+  }
+  function netMsg(status, ms) {
+    if (status === 0) { return 'blocked or no connection (' + ms + ' ms)'; }
+    if (status === -1) { return 'timed out'; }
+    if (status === -2) { return 'could not send'; }
+    return 'HTTP ' + status + ' (' + ms + ' ms)';
+  }
+
+  var ROUTE_Q = JSON.stringify({
+    locations: [{ lat: 34.0537, lon: -118.2427 }, { lat: 34.0562, lon: -118.2365 }],
+    costing: 'auto',
+    directions_options: { units: 'miles' }
+  });
+  var ROUTE_URL = 'https://valhalla1.openstreetmap.de/route?json=' + encodeURIComponent(ROUTE_Q);
+
+  function parseRoute(status, text, ms) {
+    if (status !== 200) { return { ok: 0, msg: netMsg(status, ms) }; }
+    try {
+      var j = JSON.parse(text), m = j.trip.legs[0].maneuvers;
+      return { ok: 1, msg: 'ok, ' + ms + ' ms, ' + m.length + ' steps', first: m[0].instruction };
+    } catch (e) { return { ok: 0, msg: 'bad reply (' + ms + ' ms)' }; }
+  }
+
+  function testNet() {
+    R.net = { online: navigator.onLine ? 1 : 0, geo: 'testing', route: 'waiting', route2: '' };
+    upd();
+    xget('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent('Los Angeles City Hall') + '&format=jsonv2&limit=1', {}, function (status, text, ms) {
+      if (status === 200) {
+        try {
+          var a = JSON.parse(text);
+          R.net.geo = a.length ? 'ok, ' + ms + ' ms' : 'no match (' + ms + ' ms)';
+        } catch (e) { R.net.geo = 'bad reply (' + ms + ' ms)'; }
+      } else { R.net.geo = netMsg(status, ms); }
+      R.net.route = 'testing';
+      upd();
+      xget(ROUTE_URL, { 'X-Client-Id': 'flipnav-check' }, function (s2, t2, ms2) {
+        var r = parseRoute(s2, t2, ms2);
+        R.net.route = r.msg;
+        if (r.first) { R.net.first = r.first; }
+        upd();
+        if (!r.ok) {
+          R.net.route2 = 'testing';
+          upd();
+          xget(ROUTE_URL, {}, function (s3, t3, ms3) {
+            var r3 = parseRoute(s3, t3, ms3);
+            R.net.route2 = r3.msg;
+            if (r3.first) { R.net.first = r3.first; }
+            upd();
+          });
+        }
+      });
+    });
+  }
+
+  function renderNet() {
+    var n = R.net;
+    if (!n.geo) { set('netOut', '<p class="note">Not run yet.</p>'); return; }
+    var h = row('Online', yn(n.online)) +
+      row('Address lookup', esc(n.geo), n.geo.indexOf('ok') === 0 ? 'ok' : (n.geo === 'testing' ? 'warn' : 'bad')) +
+      row('Directions', esc(n.route), n.route.indexOf('ok') === 0 ? 'ok' : (n.route === 'testing' || n.route === 'waiting' ? 'warn' : 'bad'));
+    if (n.route2) { h += row('Directions, plain request', esc(n.route2), n.route2.indexOf('ok') === 0 ? 'ok' : 'bad'); }
+    if (n.first) { h += row('First step', esc(n.first)); }
+    set('netOut', h);
+  }
+
+  /* ---------- 7. browser features ---------- */
+  function tryJS(src) { try { (new Function(src))(); return 1; } catch (e) { return 0; } }
+  function storeOK(name) {
+    try {
+      var s = window[name], k = '__t' + Math.random();
+      s.setItem(k, '1');
+      var ok = s.getItem(k) === '1';
+      s.removeItem(k);
+      return ok ? 1 : 0;
+    } catch (e) { return 0; }
+  }
+  function flexOK() {
+    try {
+      if (window.CSS && CSS.supports) { return CSS.supports('display', 'flex') ? 1 : 0; }
+      var d = document.createElement('div'); d.style.display = 'flex';
+      return d.style.display === 'flex' ? 1 : 0;
+    } catch (e) { return 0; }
+  }
+  function hav(a, b, c, d) {
+    var r = Math.PI / 180, dl = (c - a) * r, dn = (d - b) * r;
+    var x = Math.sin(dl / 2) * Math.sin(dl / 2) + Math.cos(a * r) * Math.cos(c * r) * Math.sin(dn / 2) * Math.sin(dn / 2);
+    return 12742000 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  }
+
+  R.ua = navigator.userAgent;
+  R.brands = '';
+  try {
+    if (navigator.userAgentData && navigator.userAgentData.brands) {
+      var br = [], list = navigator.userAgentData.brands;
+      for (var bi = 0; bi < list.length; bi++) { br.push(list[bi].brand + ' ' + list[bi].version); }
+      R.brands = br.join('; ');
+    }
+  } catch (e3) { }
+
+  R.js = {
+    let: tryJS('let a = 1; const b = 2;'),
+    arrow: tryJS('var f = () => 1;'),
+    tmpl: tryJS('var s = `a${1}`;'),
+    cls: tryJS('class A {}'),
+    async: tryJS('var f = async function () { await 1; };'),
+    optch: tryJS('var o = {}; var x = o?.a?.b;'),
+    promise: typeof window.Promise !== 'undefined' ? 1 : 0,
+    fetch: typeof window.fetch === 'function' ? 1 : 0,
+    abort: typeof window.AbortController !== 'undefined' ? 1 : 0,
+    raf: typeof window.requestAnimationFrame === 'function' ? 1 : 0
+  };
+  R.st = { ls: storeOK('localStorage'), ss: storeOK('sessionStorage'), idb: ('indexedDB' in window) ? 1 : 0 };
+  R.gfx = {
+    canvas: ctx ? 1 : 0,
+    svg: (document.createElementNS && document.createElementNS('http://www.w3.org/2000/svg', 'svg').createSVGRect) ? 1 : 0,
+    flex: flexOK()
+  };
+  R.feat = {
+    wake: ('wakeLock' in navigator) ? 1 : 0,
+    vib: typeof navigator.vibrate === 'function' ? 1 : 0,
+    perm: navigator.permissions ? 1 : 0,
+    share: typeof navigator.share === 'function' ? 1 : 0,
+    devor: ('DeviceOrientationEvent' in window) ? 1 : 0,
+    conn: (navigator.connection && navigator.connection.effectiveType) || 'n/a',
+    cores: navigator.hardwareConcurrency || 'n/a',
+    mem: navigator.deviceMemory || 'n/a'
+  };
+  R.dor = { n: 0, alpha: 0 };
+  on(window, 'deviceorientation', function (e) {
+    R.dor.n++;
+    if (e.alpha !== null && e.alpha !== undefined) { R.dor.alpha++; }
+    if (R.dor.n === 1 || R.dor.n % 25 === 0) { upd(); }
+  });
+
+  function bench() {
+    var p0 = pnow(), sum = 0;
+    for (var i = 0; i < 50000; i++) { sum += hav(34.05, -118.24, 34.05 + i * 1e-6, -118.24 + i * 1e-6); }
+    R.cpu = Math.round(pnow() - p0);
+    R.cpuChk = Math.round(sum) % 7;
+    upd();
+  }
+
+  function renderFeat() {
+    var j = R.js;
+    set('featOut',
+      row('Browser', esc(R.ua)) +
+      (R.brands ? row('Brands', esc(R.brands)) : '') +
+      row('Modern JS (let, arrows, class, async, ?.)', j.let + ' ' + j.arrow + ' ' + j.cls + ' ' + j.async + ' ' + j.optch) +
+      row('Promise / fetch / abort / frames', j.promise + ' ' + j.fetch + ' ' + j.abort + ' ' + j.raf) +
+      row('Saved storage (localStorage)', yn(R.st.ls)) +
+      row('Session storage / IndexedDB', R.st.ss + ' / ' + R.st.idb) +
+      row('Canvas / SVG / flexbox', R.gfx.canvas + ' / ' + R.gfx.svg + ' / ' + R.gfx.flex) +
+      row('Keep-screen-on API', yn(R.feat.wake)) +
+      row('Vibrate API', yn(R.feat.vib)) +
+      row('Share API', yn(R.feat.share)) +
+      row('Compass events', R.dor.n + ' (' + R.dor.alpha + ' with direction)') +
+      row('Speed test', R.cpu === undefined ? 'running' : R.cpu + ' ms', R.cpu > 400 ? 'warn' : '') +
+      row('CPU cores / memory GB', esc(R.feat.cores) + ' / ' + esc(R.feat.mem)) +
+      row('Connection', esc(R.feat.conn)) +
+      row('Text box input events', R.inp.n + ' (IME 229: ' + R.inp.k229 + ', last ' + esc(R.inp.last || 'none') + ')')
+    );
+  }
+
+  /* ---------- 8. summary ---------- */
+  function summary() {
+    var s = R.scr, p = R.ptr, j = R.js, L = [];
+    L.push('NAVCHECK v1 ' + new Date().toISOString().slice(0, 16));
+    L.push('UA ' + R.ua + (R.brands ? ' | ' + R.brands : ''));
+    L.push('VP inner ' + s.iw + 'x' + s.ih + ' doc ' + s.cw + 'x' + s.ch + ' outer ' + s.ow + 'x' + s.oh + ' vv ' + s.vvw + 'x' + s.vvh);
+    L.push('SCR ' + s.sw + 'x' + s.sh + ' avail ' + s.saw + 'x' + s.sah + ' dpr ' + s.dpr + ' ' + s.o + ' seen ' + R.vpSeen);
+    L.push('PTR fine' + p.fine + ' coarse' + p.coarse + ' none' + p.none + ' hover' + p.hover + ' touch' + p.touch + ' mtp' + p.mtp);
+    L.push('JS let' + j.let + ' arrow' + j.arrow + ' tmpl' + j.tmpl + ' class' + j.cls + ' async' + j.async + ' optch' + j.optch + ' prom' + j.promise + ' fetch' + j.fetch + ' abort' + j.abort + ' raf' + j.raf);
+    L.push('GEO api' + R.geo.api + ' sec' + R.geo.sec + ' ' + R.geo.proto + ' perm ' + (R.geo.perm || '?'));
+    if (R.fix) {
+      var f = R.fix;
+      L.push('FIX acc ' + f.acc + 'm ttf ' + f.ttf + 's age ' + f.age + 's spd ' + num(f.spd, 1) + ' hdg ' + num(f.hdg) + ' alt ' + num(f.alt) + ' at ' + num(f.lat, 2) + ',' + num(f.lon, 2));
+    }
+    if (R.geoErr) { L.push('GEOERR ' + R.geoErr.code + ' ' + R.geoErr.msg + ' after ' + R.geoErr.after + 's'); }
+    if (R.watch) {
+      var W = R.watch;
+      L.push('WATCH n' + W.n + ' avg ' + W.avg + 's maxgap ' + W.maxGap + 's acc ' + W.acc + '/' + W.best + ' spdN ' + W.spdN + ' hdgN ' + W.hdgN + ' err ' + W.errs + (W.lastErr ? ' (' + W.lastErr + ')' : '') + ' hidTaken ' + W.hidTaken + ' hidRun ' + W.hidRun + ' hidden ' + R.vis.hid + 'x longest ' + R.vis.longest + 's');
+    }
+    var gk = [];
+    for (var i = 0; i < STEPS.length; i++) {
+      if (R.gk[STEPS[i][0]] !== undefined) { gk.push(STEPS[i][0] + '=' + R.gk[STEPS[i][0]]); }
+    }
+    if (gk.length) { L.push('KEYMAP ' + gk.join('; ') + (R.gkNote ? ' [' + R.gkNote + ']' : '')); }
+    L.push('KEYS n' + K.n + ' arrows ' + K.arrows + ' focusmove ' + K.spatial + ' scroll ' + K.scrolls + ' mouse ' + K.mouse + ' touch ' + K.touch);
+    L.push('KEYIDS ' + Object.keys(K.seen).join(' '));
+    L.push('INPUT n' + R.inp.n + ' ime229 ' + R.inp.k229 + ' last ' + (R.inp.last || '-') + ' glyphsBad ' + (R.glyphBad || '-'));
+    L.push('READ ' + (R.read ? R.read + 'px' : '-'));
+    L.push('STORE ls' + R.st.ls + ' ss' + R.st.ss + ' idb' + R.st.idb + ' GFX canvas' + R.gfx.canvas + ' svg' + R.gfx.svg + ' flex' + R.gfx.flex);
+    L.push('VOICE api' + R.sp.api + ' voices ' + R.sp.voices + ' ' + (R.sp.res || 'not run') + ' | WAKE api' + R.feat.wake + ' ' + (R.wake || 'not run') + ' | VIB api' + R.feat.vib + ' ' + (R.vib || 'not run') + ' | SHARE ' + R.feat.share);
+    if (R.net.geo) { L.push('NET online' + R.net.online + ' lookup ' + R.net.geo + ' | route ' + R.net.route + (R.net.route2 ? ' | plain ' + R.net.route2 : '')); }
+    L.push('CPU ' + (R.cpu === undefined ? '-' : R.cpu) + 'ms cores ' + R.feat.cores + ' mem ' + R.feat.mem + ' conn ' + R.feat.conn + ' compass ' + R.dor.n + '/' + R.dor.alpha);
+    return L.join('\n');
+  }
+
+  function renderSend() {
+    var txt = summary();
+    $('sum').value = txt;
+    $('lnkSms').href = 'sms:?body=' + encodeURIComponent(txt);
+    $('lnkMail').href = 'mailto:?subject=' + encodeURIComponent('Nav check results') + '&body=' + encodeURIComponent(txt);
+    $('btnShare').style.display = R.feat.share ? 'block' : 'none';
+  }
+
+  function renderAll() {
+    renderScreen(); renderGeo(); renderWatch(); renderKeys(); renderSizes();
+    renderAV(); renderNet(); renderFeat(); renderSend();
+  }
+
+  /* ---------- wire up ---------- */
+  on($('btnFix'), 'click', testFix);
+  on($('btnWatch'), 'click', toggleWatch);
+  on($('btnKeys'), 'click', startGuided);
+  on($('btnVoice'), 'click', testVoice);
+  on($('btnWake'), 'click', testWake);
+  on($('btnVib'), 'click', testVib);
+  on($('btnNet'), 'click', testNet);
+  on($('btnShare'), 'click', function () {
+    try {
+      navigator.share({ title: 'Nav check results', text: summary() }).then(function () { }, function () { });
+    } catch (e) { }
+  });
+  on($('btnClear'), 'click', function () {
+    try { localStorage.removeItem(STORE); } catch (e) { }
+    location.reload();
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      hidStart = t();
+      R.vis.hid++;
+      backLeft();
+    } else if (hidStart !== null) {
+      var d = Math.round((t() - hidStart) / 1000);
+      if (d > R.vis.longest) { R.vis.longest = d; }
+      hidSpans.push([hidStart, t()]);
+      if (hidSpans.length > 10) { hidSpans.shift(); }
+      hidStart = null;
+    }
+    upd();
+  }, false);
+
+  if (R.watch) { R.watch.running = 0; }
+  measure();
+  permCheck();
+  renderAll();
+  save();
+  setTimeout(bench, 800);
+})();
+</script>
+</body>
+</html>
