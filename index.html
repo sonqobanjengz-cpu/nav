@@ -6,10 +6,10 @@
 <title>Nav</title>
 <style>
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;height:100%;background:#000;color:#fff;font-family:sans-serif;overflow:hidden}
-.scr{display:none;height:100%;padding:4px 6px;overflow:hidden}
+html,body{margin:0;padding:0;background:#000;color:#fff;font-family:sans-serif}
+html.lock,html.lock body{height:100%;overflow:hidden}
+.scr{display:none;padding:4px 6px 24px}
 .scr.on{display:block}
-#home.on,#pick.on,#msg.on,#arrived.on{overflow-y:auto}
 h1{font-size:24px;margin:2px 0 6px}
 #hrow{display:flex;align-items:baseline;justify-content:space-between}
 #gmini{font-size:20px;font-weight:bold}
@@ -27,7 +27,7 @@ button.item:hover span,button.item:focus span{color:#000}
 .two{display:flex}
 .two button{flex:1}
 .two button+button{margin-left:6px}
-#nav{padding:2px 6px}
+#nav{padding:2px 6px;height:100%;overflow:hidden}
 #rowA{display:flex;align-items:center;height:90px}
 #arw{width:88px;height:88px;flex:0 0 88px}
 #dist{font-size:40px;font-weight:bold;margin-left:8px;white-space:nowrap;overflow:hidden}
@@ -51,7 +51,7 @@ button.item:hover span,button.item:focus span{color:#000}
   <p id="gps" class="line" style="display:none"></p>
   <button type="button" id="bLoc" style="display:none">Enable location</button>
   <div id="recent"></div>
-  <p class="line dim">Directions by Valhalla (FOSSGIS). Map data &copy; OpenStreetMap contributors.</p>
+  <p class="line dim">Directions by Valhalla (FOSSGIS). Map data &copy; OpenStreetMap contributors. Version 2.</p>
 </div>
 
 <div id="pick" class="scr">
@@ -118,6 +118,8 @@ S.voice = load('voice', true);
 function show(name) {
   var all = ['home', 'pick', 'nav', 'arrived', 'msg'];
   for (var i = 0; i < all.length; i++) { $(all[i]).className = 'scr' + (all[i] === name ? ' on' : ''); }
+  document.documentElement.className = name === 'nav' ? 'lock' : '';
+  window.scrollTo(0, 0);
   S.screen = name;
   closeMenu();
   if (name === 'home') { renderHome(); renderRecent(); }
