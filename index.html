@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nav</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;background:#000;color:#fff;font-family:sans-serif;overflow:hidden}
+.scr{display:none;height:100%;padding:4px 6px;overflow:hidden}
+.scr.on{display:block}
+#home.on,#pick.on,#msg.on,#arrived.on{overflow-y:auto}
+h1{font-size:24px;margin:2px 0 6px}
+#hrow{display:flex;align-items:baseline;justify-content:space-between}
+#gmini{font-size:20px;font-weight:bold}
+.line{font-size:20px;line-height:1.2;margin:4px 0}
+.dim{color:#bbb}.ok{color:#5be37d}.warn{color:#ffc400}.bad{color:#ff7a7a}
+input{display:block;width:100%;font-size:24px;font-family:sans-serif;padding:6px 8px;margin:0 0 6px;border:3px solid #888;border-radius:6px;background:#1a1a1a;color:#fff}
+input:focus{border-color:#ffc400;outline:none}
+button{display:block;width:100%;font-size:22px;font-weight:bold;font-family:sans-serif;line-height:1.15;padding:7px 6px;margin:0 0 6px;border:3px solid #fff;border-radius:6px;background:#fff;color:#000;text-align:center}
+button:hover,button:focus{background:#ffc400;border-color:#ffc400;color:#000;outline:none}
+button.alt{background:#000;color:#fff;border-color:#777}
+button.item{text-align:left;font-size:20px;background:#000;color:#fff;border-color:#777;padding:5px 8px}
+button.item span{display:block;font-weight:normal;color:#ccc}
+button.alt:hover,button.alt:focus,button.item:hover,button.item:focus{background:#ffc400;color:#000;border-color:#ffc400}
+button.item:hover span,button.item:focus span{color:#000}
+.two{display:flex}
+.two button{flex:1}
+.two button+button{margin-left:6px}
+#nav{padding:2px 6px}
+#rowA{display:flex;align-items:center;height:90px}
+#arw{width:88px;height:88px;flex:0 0 88px}
+#dist{font-size:40px;font-weight:bold;margin-left:8px;white-space:nowrap;overflow:hidden}
+#act{font-size:22px;font-weight:bold;line-height:1.15;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#cue{color:#ffc400}
+#street{font-size:24px;font-weight:bold;line-height:1.12;margin-top:2px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#then,#foot{font-size:20px;line-height:1.2;margin-top:2px;white-space:pre;overflow:hidden;text-overflow:ellipsis;color:#bbb}
+#foot.warn{color:#ffc400}#foot.bad{color:#ff7a7a}
+#menu{display:none;position:fixed;left:0;top:0;right:0;bottom:0;background:#000;padding:4px 6px;z-index:5;overflow-y:auto}
+#menu button{padding:4px 6px;margin-bottom:5px}
+#menu .line{margin:2px 0}
+#arrived h1{font-size:40px;color:#5be37d;margin:8px 0}
+</style>
+</head>
+<body>
+
+<div id="home" class="scr on">
+  <div id="hrow"><h1>Where to?</h1><span id="gmini" class="dim">GPS...</span></div>
+  <form id="form" autocomplete="off"><input id="q" type="text" placeholder="Address or place" autocomplete="off" autocorrect="off" spellcheck="false"></form>
+  <div class="two"><button type="button" id="bDrive">Drive</button><button type="button" id="bWalk" class="alt">Walk</button></div>
+  <p id="gps" class="line" style="display:none"></p>
+  <button type="button" id="bLoc" style="display:none">Enable location</button>
+  <div id="recent"></div>
+  <p class="line dim">Directions by Valhalla (FOSSGIS). Map data &copy; OpenStreetMap contributors.</p>
+</div>
+
+<div id="pick" class="scr">
+  <p id="pickT" class="line">Searching...</p>
+  <div id="pickL"></div>
+  <button type="button" id="bPickBack" class="alt">Back</button>
+</div>
+
+<div id="nav" class="scr">
+  <div id="rowA"><canvas id="arw" width="88" height="88"></canvas><div id="dist"></div></div>
+  <div id="act"></div>
+  <div id="street"></div>
+  <div id="then"></div>
+  <div id="foot"></div>
+</div>
+
+<div id="menu">
+  <button type="button" id="mResume">Back to directions</button>
+  <button type="button" id="mVoice" class="alt">Voice: on</button>
+  <button type="button" id="mRepeat" class="alt">Repeat direction</button>
+  <button type="button" id="mEnd" class="alt">End trip</button>
+  <p id="mInfo" class="line dim"></p>
+</div>
+
+<div id="arrived" class="scr">
+  <h1>Arrived</h1>
+  <p id="arrT" class="line"></p>
+  <button type="button" id="bDone">Done</button>
+</div>
+
+<div id="msg" class="scr">
+  <p id="msgT" class="line"></p>
+  <button type="button" id="bRetry">Try again</button>
+  <button type="button" id="bMsgBack" class="alt">Back</button>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+/* ================= constants ================= */
+var $ = function (id) { return document.getElementById(id); };
+var CLIENT = 'sonqobanjengz-cpu.github.io/nav';
+var VAL = 'https://valhalla1.openstreetmap.de';
+var NOM = 'https://nominatim.openstreetmap.org/search';
+var MI = 1609.344, FT = 3.28084;
+
+var S = {
+  screen: 'home', mode: 'auto', sim: false,
+  fix: null, fixT: 0, watchId: null, perm: 'unknown', gpsErr: '',
+  dest: null, route: null, nodes: null, nodesNote: '', routeVer: 0,
+  along: 0, segIdx: 0, next: 1, said: {}, offN: 0, offT: 0, routeT: 0,
+  busy: false, status: '', retryAt: 0, lastVal: 0, lastNom: 0,
+  wake: null, voice: true, menu: false, resumeSay: false,
+  simAlong: 0, simTimer: null, arrowKey: ''
+};
+
+/* ================= storage ================= */
+function load(k, d) { try { var v = localStorage.getItem('flipnav.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }
+function keep(k, v) { try { localStorage.setItem('flipnav.' + k, JSON.stringify(v)); } catch (e) { } }
+S.voice = load('voice', true);
+
+/* ================= screens ================= */
+function show(name) {
+  var all = ['home', 'pick', 'nav', 'arrived', 'msg'];
+  for (var i = 0; i < all.length; i++) { $(all[i]).className = 'scr' + (all[i] === name ? ' on' : ''); }
+  S.screen = name;
+  closeMenu();
+  if (name === 'home') { renderHome(); renderRecent(); }
+}
+function showMsg(text, retry) {
+  $('msgT').textContent = text;
+  S.retryFn = retry || null;
+  $('bRetry').style.display = retry ? 'block' : 'none';
+  show('msg');
+}
+
+/* ================= helpers ================= */
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function hav(a, b) {
+  var r = Math.PI / 180, dl = (b.lat - a.lat) * r, dn = (b.lon - a.lon) * r;
+  var x = Math.sin(dl / 2) * Math.sin(dl / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dn / 2) * Math.sin(dn / 2);
+  return 12742000 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+function norm180(a) { while (a > 180) { a -= 360; } while (a <= -180) { a += 360; } return a; }
+function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+function low(s) { return s ? s.charAt(0).toLowerCase() + s.slice(1) : s; }
+function noDot(s) { return String(s || '').replace(/[.\s]+$/, ''); }
+
+function fmtDist(m) {
+  var ft = m * FT;
+  if (ft < 100) { return Math.max(10, Math.round(ft / 10) * 10) + ' ft'; }
+  if (ft < 528) { return Math.round(ft / 50) * 50 + ' ft'; }
+  var mi = m / MI;
+  return mi < 10 ? mi.toFixed(1) + ' mi' : Math.round(mi) + ' mi';
+}
+function sayDist(m) {
+  var ft = m * FT, mi = m / MI;
+  if (mi < 0.19) { return (ft < 500 ? Math.max(50, Math.round(ft / 50) * 50) : Math.round(ft / 100) * 100) + ' feet'; }
+  if (mi < 0.35) { return 'a quarter mile'; }
+  if (mi < 0.62) { return 'half a mile'; }
+  if (mi < 0.88) { return 'three quarters of a mile'; }
+  if (mi < 1.15) { return '1 mile'; }
+  if (mi < 10) { return (Math.round(mi * 2) / 2) + ' miles'; }
+  return Math.round(mi) + ' miles';
+}
+function fmtClock(ms) {
+  var d = new Date(ms);
+  try { return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (e) { return d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); }
+}
+
+var ABBR = [['North', 'N'], ['South', 'S'], ['East', 'E'], ['West', 'W'], ['Street', 'St'], ['Avenue', 'Ave'],
+  ['Boulevard', 'Blvd'], ['Drive', 'Dr'], ['Road', 'Rd'], ['Place', 'Pl'], ['Lane', 'Ln'], ['Court', 'Ct'],
+  ['Parkway', 'Pkwy'], ['Highway', 'Hwy'], ['Freeway', 'Fwy'], ['Terrace', 'Ter'], ['Circle', 'Cir']];
+function abbr(s) {
+  s = String(s || '');
+  for (var i = 0; i < ABBR.length; i++) { s = s.replace(new RegExp('\\b' + ABBR[i][0] + '\\b', 'g'), ABBR[i][1]); }
+  return s;
+}
+
+/* ================= network ================= */
+function xfetch(url, opt, ms) {
+  var ctl = new AbortController();
+  var tm = setTimeout(function () { ctl.abort(); }, ms || 15000);
+  var o = opt || {};
+  o.signal = ctl.signal;
+  return fetch(url, o).then(function (r) {
+    clearTimeout(tm);
+    if (!r.ok) {
+      return r.text().then(function (t) { var e = new Error('HTTP ' + r.status); e.status = r.status; e.body = t; throw e; },
+        function () { var e = new Error('HTTP ' + r.status); e.status = r.status; e.body = ''; throw e; });
+    }
+    return r.json();
+  }, function (err) { clearTimeout(tm); var e = new Error((err && err.message) || 'network'); e.status = 0; throw e; });
+}
+/* both free servers allow about 1 request per second */
+function valGap() { var w = 1100 - (Date.now() - S.lastVal); S.lastVal = Date.now() + Math.max(0, w); return sleep(Math.max(0, w)); }
+function nomGap() { var w = 1100 - (Date.now() - S.lastNom); S.lastNom = Date.now() + Math.max(0, w); return sleep(Math.max(0, w)); }
+function netReason(e) {
+  if (!e || !e.status) { return 'No connection. Check your signal.'; }
+  if (e.status === 429) { return 'The route server is busy. Try again in a moment.'; }
+  if (e.status === 400 && /path|route|location/i.test(e.body || '')) { return 'No route found to that place.'; }
+  return 'The route server had a problem (' + e.status + ').';
+}
+
+/* ================= voice + buzz ================= */
+function say(text, urgent) {
+  if (!S.voice || !text || !('speechSynthesis' in window)) { return; }
+  try {
+    if (urgent) { window.speechSynthesis.cancel(); }
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US';
+    window.speechSynthesis.speak(u);
+  } catch (e) { }
+}
+function buzz() { try { if (navigator.vibrate) { navigator.vibrate([150, 80, 150]); } } catch (e) { } }
+
+/* ================= keep screen on ================= */
+function wakeOn() {
+  if (!('wakeLock' in navigator) || S.wake || document.visibilityState !== 'visible') { return; }
+  navigator.wakeLock.request('screen').then(function (lock) {
+    S.wake = lock;
+    lock.addEventListener('release', function () { S.wake = null; });
+  }, function () { });
+}
+
+/* ================= GPS ================= */
+function startGPS() {
+  if (!navigator.geolocation) { S.gpsErr = 'none'; renderHome(); return; }
+  if (S.watchId !== null) { return; }
+  S.watchId = navigator.geolocation.watchPosition(function (p) { onFix(p, false); }, onGpsErr,
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+}
+function onGpsErr(e) {
+  if (e.code === 1) {
+    S.perm = 'denied';
+    if (S.watchId !== null) { navigator.geolocation.clearWatch(S.watchId); S.watchId = null; }
+  } else if (e.code === 3) { S.gpsErr = 'slow'; } else { S.gpsErr = 'off'; }
+  if (S.screen === 'home') { renderHome(); }
+  if (S.screen === 'nav') { renderNav(); }
+}
+function askLocation() {
+  if (!navigator.geolocation) { return; }
+  $('gps').textContent = 'Asking for location...';
+  navigator.geolocation.getCurrentPosition(function (p) { S.perm = 'granted'; onFix(p, false); startGPS(); }, onGpsErr,
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+}
+function onFix(p, fromSim) {
+  if (S.sim && !fromSim && S.screen === 'nav' && S.route) { return; }
+  var c = p.coords, now = Date.now(), gap = now - S.fixT;
+  S.fix = {
+    lat: c.latitude, lon: c.longitude, acc: c.accuracy,
+    spd: (c.speed === null || isNaN(c.speed)) ? null : c.speed,
+    hdg: (c.heading === null || isNaN(c.heading)) ? null : c.heading
+  };
+  S.fixT = now; S.perm = 'granted'; S.gpsErr = '';
+  if (S.screen === 'nav') { navTick(gap > 6000); }
+  else if (S.screen === 'home') { renderHome(); }
+}
+
+/* ================= polyline ================= */
+function decode(str) {
+  var i = 0, lat = 0, lon = 0, out = [];
+  while (i < str.length) {
+    var b, s = 0, r = 0;
+    do { b = str.charCodeAt(i++) - 63; r |= (b & 31) << s; s += 5; } while (b >= 32);
+    lat += (r & 1) ? ~(r >> 1) : (r >> 1);
+    s = 0; r = 0;
+    do { b = str.charCodeAt(i++) - 63; r |= (b & 31) << s; s += 5; } while (b >= 32);
+    lon += (r & 1) ? ~(r >> 1) : (r >> 1);
+    out.push([lat / 1e6, lon / 1e6]);
+  }
+  return out;
+}
+
+/* ================= route model ================= */
+function buildRoute(j) {
+  var leg = j.trip.legs[0];
+  var pts = decode(leg.shape);
+  if (pts.length < 2) { pts.push(pts[0]); }
+  var lat0 = pts[0][0], lon0 = pts[0][1], kx = 111320 * Math.cos(lat0 * Math.PI / 180);
+  var xy = [], cum = [0], i;
+  for (i = 0; i < pts.length; i++) { xy.push([(pts[i][1] - lon0) * kx, (pts[i][0] - lat0) * 110574]); }
+  for (i = 1; i < xy.length; i++) {
+    var dx = xy[i][0] - xy[i - 1][0], dy = xy[i][1] - xy[i - 1][1];
+    cum.push(cum[i - 1] + Math.sqrt(dx * dx + dy * dy));
+  }
+  var R = { pts: pts, xy: xy, cum: cum, total: cum[cum.length - 1], lat0: lat0, lon0: lon0, kx: kx, shape: leg.shape, man: [] };
+  var ms = leg.maneuvers || [];
+  for (i = 0; i < ms.length; i++) {
+    var m = ms[i], b = Math.min(m.begin_shape_index || 0, pts.length - 1), e = Math.min(m.end_shape_index || b, pts.length - 1);
+    m.a = cum[b];
+    m.geo = turnAngle(R, b, m.type === 26 ? e : b);
+    R.man.push(m);
+  }
+  if (!R.man.length) { R.man.push({ type: 1, a: 0, geo: 0 }); }
+  if (R.man.length === 1) { R.man.push({ type: 4, a: R.total, geo: 0 }); }
+  return R;
+}
+function bearingXY(a, b) { return Math.atan2(b[0] - a[0], b[1] - a[1]) * 180 / Math.PI; }
+function turnAngle(R, bi, ei) {
+  var xy = R.xy, cum = R.cum, n = xy.length, i = bi, j = ei;
+  while (i > 0 && cum[bi] - cum[i] < 20) { i--; }
+  while (j < n - 1 && cum[j] - cum[ei] < 20) { j++; }
+  if (i === bi || j === ei) { return 0; }
+  return norm180(bearingXY(xy[ei], xy[j]) - bearingXY(xy[i], xy[bi]));
+}
+function project(lat, lon, full) {
+  var R = S.route, P = R.xy, cum = R.cum, n = P.length;
+  var q = [(lon - R.lon0) * R.kx, (lat - R.lat0) * 110574];
+  var lo = 0, hi = n - 2;
+  if (!full) {
+    lo = S.segIdx; while (lo > 0 && cum[lo] > S.along - 150) { lo--; }
+    hi = S.segIdx; while (hi < n - 2 && cum[hi] < S.along + 800) { hi++; }
+  }
+  var bd = 1e15, bi = 0, bt = 0;
+  for (var i = lo; i <= hi; i++) {
+    var a = P[i], b = P[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy;
+    var t = L2 > 0 ? ((q[0] - a[0]) * dx + (q[1] - a[1]) * dy) / L2 : 0;
+    t = t < 0 ? 0 : (t > 1 ? 1 : t);
+    var ex = a[0] + t * dx - q[0], ey = a[1] + t * dy - q[1], d2 = ex * ex + ey * ey;
+    if (d2 < bd) { bd = d2; bi = i; bt = t; }
+  }
+  if (!full && Math.sqrt(bd) > 60) { return project(lat, lon, true); }
+  S.segIdx = bi;
+  return { dist: Math.sqrt(bd), along: cum[bi] + bt * (cum[bi + 1] - cum[bi]) };
+}
+function pointAt(along) {
+  var R = S.route, cum = R.cum, lo = 0, hi = cum.length - 1;
+  while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (cum[mid] <= along) { lo = mid; } else { hi = mid; } }
+  var seg = cum[hi] - cum[lo], t = seg > 0 ? (along - cum[lo]) / seg : 0;
+  var a = R.pts[lo], b = R.pts[hi];
+  return { lat: a[0] + (b[0] - a[0]) * t, lon: a[1] + (b[1] - a[1]) * t, hdg: (bearingXY(R.xy[lo], R.xy[hi]) + 360) % 360 };
+}
+
+/* ================= intersections + lights ================= */
+function loadNodes(ver) {
+  var R = S.route; if (!R) { return; }
+  var body = JSON.stringify({
+    encoded_polyline: R.shape, shape_match: 'edge_walk', costing: S.mode,
+    directions_options: { units: 'miles' },
+    filters: { action: 'include', attributes: ['edge.length', 'edge.traffic_signal', 'edge.use', 'edge.internal_intersection',
+      'node.type', 'node.traffic_signal', 'node.intersecting_edge.use', 'node.intersecting_edge.road_class',
+      'node.intersecting_edge.from_edge_name_consistency', 'node.intersecting_edge.to_edge_name_consistency'] }
+  });
+  S.nodesNote = 'loading';
+  valGap().then(function () {
+    return xfetch(VAL + '/trace_attributes', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Client-Id': CLIENT }, body: body }, 20000);
+  }).then(null, function () {
+    return valGap().then(function () {
+      return xfetch(VAL + '/trace_attributes', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: body }, 20000);
+    });
+  }).then(function (j) {
+    if (ver !== S.routeVer) { return; }
+    S.nodes = buildNodes(j);
+    S.nodesNote = S.nodes ? 'ready' : 'empty';
+    if (S.screen === 'nav') { renderNav(); }
+  }, function (e) {
+    if (ver !== S.routeVer) { return; }
+    S.nodes = null;
+    S.nodesNote = 'failed (' + (e && e.status ? e.status : 'network') + ')';
+  });
+}
+function isStreet(n) {
+  if (n.type && n.type !== 'street_intersection') { return false; }
+  var ies = n.intersecting_edges || [];
+  for (var i = 0; i < ies.length; i++) {
+    var ie = ies[i];
+    var use = ie.use || 'road';
+    if ((use === 'road' || use === 'culdesac') && ie.road_class !== 'service_other' &&
+      !ie.from_edge_name_consistency && !ie.to_edge_name_consistency) { return true; }
+  }
+  return false;
+}
+function buildNodes(j) {
+  var edges = (j && j.edges) || [];
+  if (!edges.length) { return null; }
+  var unit = (j.units === 'kilometers' || j.units === 'km') ? 1000 : MI;
+  var raw = [], cum = 0;
+  for (var i = 0; i < edges.length; i++) {
+    var e = edges[i];
+    cum += (e.length || 0) * unit;
+    if (i === edges.length - 1) { break; }
+    var n = e.end_node || {};
+    var st = isStreet(n), sig = !!(n.traffic_signal || e.traffic_signal);
+    if (st || sig) { raw.push({ d: cum, street: st, sig: sig }); }
+  }
+  var R = S.route, k = (cum > 0 && R.total / cum > 0.8 && R.total / cum < 1.25) ? R.total / cum : 1;
+  var join = S.mode === 'auto' ? 30 : 15, out = [];
+  for (i = 0; i < raw.length; i++) {
+    var d = raw[i].d * k, last = out[out.length - 1];
+    if (last && d - last.d1 <= join) {
+      last.d1 = d; last.street = last.street || raw[i].street; last.sig = last.sig || raw[i].sig;
+    } else { out.push({ d0: d, d1: d, street: raw[i].street, sig: raw[i].sig }); }
+  }
+  return out;
+}
+function turnish(t) { return (t >= 9 && t <= 16) || (t >= 17 && t <= 19); }
+function cueFor(k) {
+  var N = S.nodes, R = S.route, m = R && R.man[k];
+  if (!N || !m || !turnish(m.type)) { return null; }
+  if (m.a - S.along > (S.mode === 'auto' ? 1300 : 400)) { return null; }
+  var tc = null, best = 1e9, i, c;
+  for (i = 0; i < N.length; i++) {
+    c = N[i];
+    var dd = m.a < c.d0 ? c.d0 - m.a : (m.a > c.d1 ? m.a - c.d1 : 0);
+    if (dd < best) { best = dd; tc = c; }
+    if (c.d0 > m.a + 40) { break; }
+  }
+  if (!tc || best > 25) { return null; }
+  var streets = 0, lights = 0;
+  for (i = 0; i < N.length; i++) {
+    c = N[i];
+    if (c === tc) { break; }
+    if (c.d1 <= S.along + 20) { continue; }
+    if (c.street) { streets++; }
+    if (c.sig) { lights++; }
+  }
+  if (tc.sig && lights <= 2) { return { t: 'light', n: lights }; }
+  if (tc.street && streets <= 2) { return { t: 'street', n: streets }; }
+  return null;
+}
+var CUE_SHOW = { light: ['at next light', 'at 2nd light', 'at 3rd light'], street: ['at next intersection', 'in 2 streets', 'in 3 streets'] };
+var CUE_EARLY = { light: ['at the next light', 'at the second light', 'at the third light'], street: ['at the next intersection', 'two streets ahead', 'three streets ahead'] };
+var CUE_FINAL = { light: ['at the light', 'at the second light', 'at the third light'], street: ['', 'two streets ahead', 'three streets ahead'] };
+
+/* ================= maneuver wording ================= */
+var SHOW_ACT = { 1: 'Head', 2: 'Head', 3: 'Head', 7: 'Continue', 8: 'Continue', 9: 'Slight right', 10: 'Right', 11: 'Sharp right',
+  12: 'U-turn', 13: 'U-turn', 14: 'Sharp left', 15: 'Left', 16: 'Slight left', 17: 'Ramp', 18: 'Ramp right', 19: 'Ramp left',
+  20: 'Exit right', 21: 'Exit left', 22: 'Straight', 23: 'Keep right', 24: 'Keep left', 25: 'Merge', 26: 'Roundabout',
+  27: 'Exit roundabout', 37: 'Merge right', 38: 'Merge left', 4: 'Arrive', 5: 'Arrive on right', 6: 'Arrive on left' };
+var SAY_ACT = { 7: 'continue', 8: 'continue', 9: 'bear right', 10: 'turn right', 11: 'make a sharp right', 12: 'make a U-turn',
+  13: 'make a U-turn', 14: 'make a sharp left', 15: 'turn left', 16: 'bear left', 17: 'take the ramp straight ahead',
+  18: 'take the ramp on the right', 19: 'take the ramp on the left', 20: 'take the exit on the right', 21: 'take the exit on the left',
+  22: 'stay straight', 23: 'keep right', 24: 'keep left', 25: 'merge', 37: 'merge right', 38: 'merge left' };
+var ANG = { 1: 0, 2: 0, 3: 0, 7: 0, 8: 0, 9: 40, 10: 90, 11: 135, 14: -135, 15: -90, 16: -40, 17: 0, 18: 35, 19: -35,
+  20: 35, 21: -35, 22: 0, 23: 25, 24: -25, 25: 0, 37: 20, 38: -20, 27: 0 };
+
+function isDest(m) { return m.type >= 4 && m.type <= 6; }
+function signOf(m) {
+  var s = m.sign || {}, num = s.exit_number_elements && s.exit_number_elements[0] && s.exit_number_elements[0].text;
+  var tw = s.exit_toward_elements && s.exit_toward_elements[0] && s.exit_toward_elements[0].text;
+  return { num: num || '', toward: tw || '' };
+}
+function streetOf(m) { return (m.street_names && m.street_names[0]) || ''; }
+function arrowOf(m) {
+  if (isDest(m)) { return { kind: 'dest', ang: 0 }; }
+  if (m.type === 12) { return { kind: 'uturn', ang: 180 }; }
+  if (m.type === 13) { return { kind: 'uturn', ang: -180 }; }
+  if (m.type === 26) { return { kind: 'round', ang: m.geo || 0 }; }
+  if (ANG.hasOwnProperty(m.type)) { return { kind: 'turn', ang: ANG[m.type] }; }
+  var g = m.geo || 0;
+  if (Math.abs(g) > 160) { return { kind: 'uturn', ang: g }; }
+  return { kind: 'turn', ang: clamp(g, -135, 135) };
+}
+function glyphOf(m) {
+  var a = arrowOf(m);
+  if (a.kind === 'dest') { return ''; }
+  if (a.kind === 'uturn') { return a.ang < 0 ? '\u21B6 ' : '\u21B7 '; }
+  if (a.ang <= -20) { return '\u2190 '; }
+  if (a.ang >= 20) { return '\u2192 '; }
+  return '\u2191 ';
+}
+function showAct(m) {
+  if (m.type === 26 && m.roundabout_exit_count) {
+    var n = m.roundabout_exit_count;
+    return 'Roundabout, ' + n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th') + ' exit';
+  }
+  return SHOW_ACT[m.type] || 'Continue';
+}
+function showStreet(m) {
+  if (isDest(m)) { return S.dest ? S.dest.label : ''; }
+  var sg = signOf(m);
+  if ((m.type === 20 || m.type === 21) && (sg.num || sg.toward)) {
+    return (sg.num ? 'Exit ' + sg.num : '') + (sg.num && sg.toward ? ', ' : '') + (sg.toward ? abbr(sg.toward) : '');
+  }
+  return abbr(streetOf(m)) || (sg.toward ? 'toward ' + abbr(sg.toward) : '');
+}
+/* spoken action + street, e.g. "turn right onto Main Street" */
+function sayActOnto(m) {
+  if (m.type === 26 || !SAY_ACT[m.type]) {
+    return low(noDot(m.verbal_pre_transition_instruction || m.instruction || 'continue'));
+  }
+  var act = SAY_ACT[m.type], sg = signOf(m), st = streetOf(m);
+  if ((m.type === 20 || m.type === 21) && sg.num) { act = 'take exit ' + sg.num + (m.type === 20 ? ' on the right' : ' on the left'); }
+  if (sg.toward && m.type >= 17 && m.type <= 21) { return act + ' toward ' + sg.toward; }
+  if (st) { return act + (m.type === 7 || m.type === 8 ? ' on ' : ' onto ') + st; }
+  return act;
+}
+function destSide(m) { return m.type === 5 ? 'on the right' : (m.type === 6 ? 'on the left' : 'ahead'); }
+
+function phrase(k, d, final) {
+  var R = S.route, m = R.man[k];
+  if (isDest(m)) {
+    return final ? 'Your destination is ' + destSide(m) + '.' : 'In ' + sayDist(d) + ', your destination is ' + destSide(m) + '.';
+  }
+  var cue = cueFor(k), core = sayActOnto(m), txt;
+  if (final) {
+    var fc = cue ? CUE_FINAL[cue.t][cue.n] : '';
+    txt = fc ? cap(fc) + ', ' + core + '.' : cap(core) + '.';
+    var m2 = R.man[k + 1];
+    if (m2 && !isDest(m2) && m2.a - m.a < (S.mode === 'auto' ? 150 : 40)) { txt += ' Then ' + sayActOnto(m2) + '.'; }
+  } else {
+    txt = 'In ' + sayDist(d) + ', ' + (cue ? CUE_EARLY[cue.t][cue.n] + ', ' : '') + core + '.';
+  }
+  return txt;
+}
+
+/* ================= arrow drawing ================= */
+function drawArrow(a) {
+  var key = a ? a.kind + a.ang : 'none';
+  if (key === S.arrowKey) { return; }
+  S.arrowKey = key;
+  var c = $('arw'), x = c.getContext && c.getContext('2d');
+  if (!x) { return; }
+  x.setTransform(1, 0, 0, 1, 0, 0);
+  x.clearRect(0, 0, 88, 88);
+  if (!a) { return; }
+  x.strokeStyle = x.fillStyle = '#ffc400';
+  x.lineWidth = 11; x.lineCap = 'round'; x.lineJoin = 'round';
+  var cx = 44, r;
+  if (a.kind === 'dest') {
+    x.beginPath(); x.arc(cx, 32, 22, 0, Math.PI * 2); x.fill();
+    x.beginPath(); x.moveTo(cx - 19, 42); x.lineTo(cx, 84); x.lineTo(cx + 19, 42); x.closePath(); x.fill();
+    x.fillStyle = '#000'; x.beginPath(); x.arc(cx, 32, 9, 0, Math.PI * 2); x.fill();
+    return;
+  }
+  if (a.kind === 'uturn') {
+    var s = a.ang < 0 ? -1 : 1, stemX = cx - 14 * s, legX = cx + 14 * s;
+    x.beginPath(); x.moveTo(stemX, 84); x.lineTo(stemX, 34);
+    if (s < 0) { x.arc(cx, 34, 14, 0, Math.PI, true); } else { x.arc(cx, 34, 14, Math.PI, 0, false); }
+    x.lineTo(legX, 52); x.stroke();
+    head(x, legX, 72, Math.PI);
+    return;
+  }
+  if (a.kind === 'round') {
+    x.beginPath(); x.arc(cx, 38, 15, 0, Math.PI * 2); x.stroke();
+    x.beginPath(); x.moveTo(cx, 84); x.lineTo(cx, 53); x.stroke();
+    r = a.ang * Math.PI / 180;
+    var sx = cx + 15 * Math.sin(r), sy = 38 - 15 * Math.cos(r);
+    x.beginPath(); x.moveTo(sx, sy); x.lineTo(cx + 26 * Math.sin(r), 38 - 26 * Math.cos(r)); x.stroke();
+    head(x, cx + 40 * Math.sin(r), 38 - 40 * Math.cos(r), r);
+    return;
+  }
+  r = a.ang * Math.PI / 180;
+  var by = 50, L = 22;
+  x.beginPath(); x.moveTo(cx, 84); x.lineTo(cx, by);
+  x.lineTo(cx + L * Math.sin(r), by - L * Math.cos(r)); x.stroke();
+  head(x, cx + (L + 17) * Math.sin(r), by - (L + 17) * Math.cos(r), r);
+}
+function head(x, tx, ty, r) {
+  var bx = tx - 19 * Math.sin(r), by = ty + 19 * Math.cos(r), px = 15 * Math.cos(r), py = 15 * Math.sin(r);
+  x.beginPath(); x.moveTo(tx, ty); x.lineTo(bx + px, by + py); x.lineTo(bx - px, by - py); x.closePath(); x.fill();
+}
+
+/* ================= navigation core ================= */
+function startNav(dest) {
+  S.dest = dest;
+  addRecent(dest);
+  S.route = null; S.nodes = null; S.nodesNote = ''; S.status = ''; S.retryAt = 0;
+  S.said = {}; S.next = 1; S.along = 0; S.segIdx = 0; S.offN = 0; S.arrowKey = '';
+  stopSim();
+  show('nav');
+  pushBack();
+  wakeOn();
+  if (S.watchId === null && S.perm !== 'denied') { startGPS(); }
+  if (S.fix && Date.now() - S.fixT < 30000) { requestRoute(false); } else { renderNav(); }
+}
+function requestRoute(re) {
+  if (S.busy || !S.fix || !S.dest) { return; }
+  S.busy = true;
+  S.status = re ? 'Recalculating...' : 'Getting route...';
+  if (re) { say('Recalculating.'); }
+  renderNav();
+  var f = S.fix, from = { lat: +f.lat.toFixed(6), lon: +f.lon.toFixed(6) };
+  if (re && f.hdg !== null && f.spd !== null && f.spd > 2) { from.heading = Math.round(f.hdg); from.heading_tolerance = 45; }
+  var q = { locations: [from, { lat: S.dest.lat, lon: S.dest.lon }], costing: S.mode, directions_options: { units: 'miles', language: 'en-US' } };
+  valGap().then(function () {
+    return xfetch(VAL + '/route?json=' + encodeURIComponent(JSON.stringify(q)), { headers: { 'X-Client-Id': CLIENT } });
+  }).then(function (j) {
+    S.busy = false; S.routeT = Date.now(); S.status = ''; S.offN = 0; S.retryAt = 0;
+    if (S.screen !== 'nav') { return; }
+    S.route = buildRoute(j);
+    S.routeVer++;
+    S.nodes = null; S.said = {}; S.next = 1; S.segIdx = 0; S.along = 0; S.arrowKey = '';
+    var pr = project(S.fix.lat, S.fix.lon, true);
+    S.along = pr.along;
+    S.next = nextIndex(1);
+    if (!re) {
+      var m0 = S.route.man[0];
+      say(noDot(m0.verbal_pre_transition_instruction || m0.instruction || 'Starting route') + '. ' + (m0.verbal_post_transition_instruction || ''));
+    }
+    loadNodes(S.routeVer);
+    if (S.sim && !S.simTimer) { startSim(); }
+    renderNav();
+    announce();
+  }, function (e) {
+    S.busy = false; S.routeT = Date.now();
+    if (S.screen !== 'nav') { return; }
+    if (!S.route) {
+      showMsg('Could not get a route. ' + netReason(e), function () { show('nav'); pushBack(); requestRoute(false); });
+    } else {
+      S.status = 'No signal. Retrying soon.';
+      S.retryAt = Date.now() + 10000;
+      renderNav();
+    }
+  });
+}
+function nextIndex(from) {
+  var M = S.route.man, k = Math.max(1, from);
+  while (k < M.length - 1 && M[k].a <= S.along + 8) { k++; }
+  return k;
+}
+function navTick(jumped) {
+  var R = S.route, f = S.fix;
+  if (!R) {
+    if (!S.busy && f) { requestRoute(false); }
+    renderNav();
+    return;
+  }
+  if (f.acc > 100) { renderNav(); return; }
+  var pr = project(f.lat, f.lon, jumped);
+  var prevAlong = S.along;
+  S.along = pr.along;
+  var now = Date.now();
+  var thr = Math.max(S.mode === 'auto' ? 40 : 25, Math.min(f.acc, 50) * 1.5);
+  if (pr.dist > thr && f.acc <= 50) { if (!S.offN) { S.offT = now; } S.offN++; } else { S.offN = 0; }
+  if (S.offN >= 3 && now - S.offT >= 3000 && now - S.routeT >= 10000 && !S.busy) { requestRoute(true); }
+
+  var arriveD = S.mode === 'auto' ? 35 : 15;
+  if ((R.total - S.along < arriveD && pr.dist < 60) || hav(f, S.dest) < arriveD) { arrive(); return; }
+
+  var back = prevAlong - S.along > 60;
+  var k = nextIndex(jumped || back ? 1 : S.next);
+  if (k !== S.next) {
+    var old = S.next;
+    S.next = k;
+    for (var i = 0; i < k; i++) { S.said[i] = { early: 1, final: 1 }; }
+    if (!jumped && k === old + 1) { afterTurn(); }
+  }
+  if (jumped) { S.resumeSay = true; }
+  renderNav();
+  announce();
+}
+function thresholds() {
+  var f = S.fix, spd = (f && f.spd !== null && f.spd > 1) ? f.spd : (S.mode === 'auto' ? 13 : 1.4);
+  if (S.mode === 'auto') { return { early: clamp(spd * 30, 250, 900), fin: clamp(spd * 9, 50, 250) }; }
+  return { early: 80, fin: 20 };
+}
+function announce() {
+  var R = S.route, k = S.next, m = R && R.man[k];
+  if (!m) { return; }
+  var d = m.a - S.along, t = thresholds(), st = S.said[k] || (S.said[k] = {});
+  if (d <= t.fin && !st.final) {
+    st.final = st.early = 1; S.resumeSay = false;
+    say(phrase(k, d, true), true); buzz();
+  } else if (d <= t.early && !st.early && d > t.fin + 30) {
+    st.early = 1; S.resumeSay = false;
+    say(phrase(k, d, false));
+  } else if (S.resumeSay) {
+    S.resumeSay = false;
+    say(phrase(k, d, d <= t.fin));
+  }
+}
+function afterTurn() {
+  var R = S.route, k = S.next, m = R.man[k], prev = R.man[k - 1];
+  var d = m.a - S.along, t = thresholds();
+  if (d > t.early + 200) { say(prev.verbal_post_transition_instruction || ('Continue for ' + sayDist(d) + '.')); }
+}
+function arrive() {
+  stopSim();
+  show('arrived');
+  $('arrT').textContent = S.dest ? S.dest.label : '';
+  say('You have arrived.', true);
+  buzz();
+}
+function endTrip() {
+  stopSim();
+  try { window.speechSynthesis.cancel(); } catch (e) { }
+  S.route = null; S.dest = null; S.nodes = null; S.sim = false;
+  show('home');
+}
+function repeatDir() {
+  var R = S.route;
+  if (!R) { say(S.status || 'Waiting for GPS.'); return; }
+  var m = R.man[S.next], d = m.a - S.along;
+  say(phrase(S.next, d, d <= thresholds().fin), true);
+}
+
+/* ================= practice mode ("demo ...") ================= */
+function startSim() {
+  S.simAlong = S.along;
+  S.simTimer = setInterval(function () {
+    if (!S.route || S.screen !== 'nav') { return; }
+    var v = S.mode === 'auto' ? 13 : 1.5;
+    S.simAlong = Math.min(S.route.total, S.simAlong + v);
+    var p = pointAt(S.simAlong);
+    onFix({ coords: { latitude: p.lat, longitude: p.lon, accuracy: 5, speed: v, heading: p.hdg }, timestamp: Date.now() }, true);
+  }, 1000);
+}
+function stopSim() { if (S.simTimer) { clearInterval(S.simTimer); S.simTimer = null; } }
+
+/* ================= rendering ================= */
+function setText(id, t) { var e = $(id); if (e.textContent !== t) { e.textContent = t; } }
+function footText() {
+  var f = S.fix, age = Date.now() - S.fixT;
+  if (S.perm === 'denied') { return { t: 'Location blocked', c: 'bad' }; }
+  if (S.status) { return { t: S.status, c: 'warn' }; }
+  if (!f || age > 8000) { return { t: 'Finding GPS...', c: 'warn' }; }
+  if (f.acc > 40) { return { t: 'GPS signal weak', c: 'warn' }; }
+  if (S.sim) { return { t: 'Practice drive', c: 'warn' }; }
+  return null;
+}
+function renderNav() {
+  if (S.screen !== 'nav') { return; }
+  var R = S.route, ft = footText();
+  if (!R) {
+    drawArrow(null);
+    setText('dist', '');
+    $('act').innerHTML = '';
+    setText('act', S.status || (S.fix ? 'Getting route...' : 'Finding GPS...'));
+    setText('street', S.dest ? S.dest.label : '');
+    setText('then', '');
+    $('foot').className = ft ? ft.c : '';
+    setText('foot', ft && ft.t !== S.status ? ft.t : '');
+    fit();
+    return;
+  }
+  var k = S.next, m = R.man[k], d = Math.max(0, m.a - S.along);
+  drawArrow(arrowOf(m));
+  setText('dist', d < 15 && !isDest(m) ? 'Now' : fmtDist(d));
+  var cue = cueFor(k), act = showAct(m);
+  $('act').innerHTML = '';
+  $('act').appendChild(document.createTextNode(act));
+  if (cue) {
+    var sp = document.createElement('span');
+    sp.id = 'cue';
+    sp.textContent = ' ' + CUE_SHOW[cue.t][cue.n];
+    $('act').appendChild(sp);
+  }
+  setText('street', showStreet(m));
+  var m2 = R.man[k + 1];
+  setText('then', m2 ? 'Then ' + (isDest(m2) ? 'arrive' : glyphOf(m2) + (abbr(streetOf(m2)) || showAct(m2))) : '');
+  if (ft) {
+    $('foot').className = ft.c;
+    setText('foot', ft.t);
+  } else {
+    $('foot').className = '';
+    setText('foot', fmtDist(Math.max(0, R.total - S.along)) + '   arrive ' + fmtClock(Date.now() + remainingSec() * 1000));
+  }
+  fit();
+}
+function remainingSec() {
+  var R = S.route, k = S.next, sec = 0;
+  for (var i = k; i < R.man.length; i++) { sec += R.man[i].time || 0; }
+  var cur = R.man[k - 1], span = R.man[k].a - cur.a;
+  if (cur && span > 0) { sec += (cur.time || 0) * clamp((R.man[k].a - S.along) / span, 0, 1); }
+  return sec;
+}
+/* keep everything inside the 240 x 222 page: drop the least important line first */
+function fit() {
+  var nav = $('nav');
+  $('then').style.display = '';
+  $('street').style.webkitLineClamp = '2';
+  $('act').style.webkitLineClamp = '2';
+  if (nav.scrollHeight <= nav.clientHeight + 1) { return; }
+  $('then').style.display = 'none';
+  if (nav.scrollHeight <= nav.clientHeight + 1) { return; }
+  $('street').style.webkitLineClamp = '1';
+  if (nav.scrollHeight <= nav.clientHeight + 1) { return; }
+  $('act').style.webkitLineClamp = '1';
+}
+
+function renderHome() {
+  var g = $('gps'), b = $('bLoc'), mini = $('gmini'), msg = '', cls = 'line bad', btn = false;
+  if (!navigator.geolocation) { msg = 'This browser has no location access.'; }
+  else if (S.perm === 'denied') {
+    msg = 'Location is blocked. Allow it for this site in the browser\'s Settings (right menu key), then press Enable location.';
+    btn = true;
+  } else if (S.perm === 'prompt' && !S.fix) { msg = 'Location is off for this page.'; cls = 'line warn'; btn = true; }
+  else if (S.gpsErr === 'off' && !S.fix) { msg = 'GPS unavailable. Is Location on in the phone settings?'; cls = 'line warn'; }
+  g.style.display = msg ? 'block' : 'none';
+  if (g.textContent !== msg) { g.textContent = msg; }
+  g.className = cls;
+  b.style.display = btn ? 'block' : 'none';
+  var fresh = S.fix && Date.now() - S.fixT < 15000;
+  var mt = fresh ? (S.fix.acc <= 40 ? 'GPS ready' : 'GPS weak') : (S.perm === 'denied' || S.perm === 'prompt' ? 'No GPS' : 'GPS...');
+  if (mini.textContent !== mt) { mini.textContent = mt; }
+  mini.className = fresh ? (S.fix.acc <= 40 ? 'ok' : 'warn') : 'dim';
+}
+
+/* ================= recent places ================= */
+function recents() { return load('recent', []); }
+function addRecent(d) {
+  var list = recents().filter(function (r) { return !(Math.abs(r.lat - d.lat) < 1e-4 && Math.abs(r.lon - d.lon) < 1e-4); });
+  list.unshift({ label: d.label, sub: d.sub || '', lat: d.lat, lon: d.lon, mode: S.mode });
+  keep('recent', list.slice(0, 6));
+}
+function renderRecent() {
+  var box = $('recent'), list = recents();
+  box.innerHTML = '';
+  for (var i = 0; i < list.length && i < 4; i++) {
+    (function (r) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'item';
+      b.textContent = r.label;
+      var sp = document.createElement('span');
+      sp.textContent = (r.mode === 'pedestrian' ? 'Walk' : 'Drive') + (r.sub ? ', ' + r.sub : '');
+      b.appendChild(sp);
+      b.addEventListener('click', function () { S.mode = r.mode || 'auto'; S.sim = false; startNav(r); });
+      box.appendChild(b);
+    })(list[i]);
+  }
+}
+
+/* ================= search ================= */
+function go(mode) {
+  var raw = $('q').value.trim();
+  if (!raw) { $('q').focus(); return; }
+  S.mode = mode;
+  S.sim = /^demo\s+/i.test(raw);
+  var q = raw.replace(/^demo\s+/i, '');
+  $('q').blur();
+  show('pick');
+  pushBack();
+  $('pickT').textContent = 'Searching...';
+  $('pickL').innerHTML = '';
+  var url = NOM + '?format=jsonv2&limit=6&countrycodes=us&accept-language=en&q=' + encodeURIComponent(q);
+  var f = S.fix;
+  if (f) { url += '&viewbox=' + [f.lon - 0.6, f.lat + 0.6, f.lon + 0.6, f.lat - 0.6].map(function (v) { return v.toFixed(4); }).join(','); }
+  nomGap().then(function () { return xfetch(url, {}); }).then(function (arr) {
+    if (S.screen !== 'pick') { return; }
+    var items = (arr || []).map(toPlace);
+    if (S.fix) {
+      items.forEach(function (p) { p.dist = hav(S.fix, p); });
+      items.sort(function (a, b) { return a.dist - b.dist; });
+    }
+    if (!items.length) { $('pickT').textContent = 'No match. Try adding the city, or use a full street address.'; return; }
+    $('pickT').textContent = 'Pick one:';
+    var box = $('pickL');
+    items.forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'item';
+      b.textContent = p.label;
+      var sp = document.createElement('span');
+      sp.textContent = (p.dist !== undefined ? fmtDist(p.dist) + (p.sub ? ', ' : '') : '') + (p.sub || '');
+      b.appendChild(sp);
+      b.addEventListener('click', function () { startNav(p); });
+      box.appendChild(b);
+    });
+  }, function (e) {
+    if (S.screen !== 'pick') { return; }
+    $('pickT').textContent = e && e.status ? 'Search failed (' + e.status + '). Try again in a moment.' : 'No connection. Check your signal.';
+  });
+}
+function toPlace(r) {
+  var parts = String(r.display_name || '').split(', ').filter(function (s) {
+    return s && s !== 'United States' && !/^\d{5}(-\d{4})?$/.test(s) && !/ County$/.test(s);
+  });
+  var label, sub;
+  if (r.name && parts[0] === r.name) { label = r.name; sub = parts.slice(1, 3).join(' '); }
+  else if (/^\d+[A-Za-z]?$/.test(parts[0] || '')) { label = parts[0] + ' ' + (parts[1] || ''); sub = parts[2] || ''; }
+  else { label = parts[0] || 'Place'; sub = parts.slice(1, 3).join(', '); }
+  return { label: abbr(label), sub: abbr(sub), lat: parseFloat(r.lat), lon: parseFloat(r.lon) };
+}
+
+/* ================= menu ================= */
+function openMenu() {
+  if (S.screen !== 'nav') { return; }
+  S.menu = true;
+  $('menu').style.display = 'block';
+  $('mVoice').textContent = 'Voice: ' + (S.voice ? 'on' : 'off');
+  var info = S.nodesNote === 'ready' ? 'Street and light cues: on' :
+    (S.nodesNote === 'loading' ? 'Street and light cues: loading' :
+      (S.nodesNote ? 'Street and light cues: unavailable (' + S.nodesNote + ')' : ''));
+  $('mInfo').textContent = info;
+}
+function closeMenu() { S.menu = false; $('menu').style.display = 'none'; }
+
+/* Back key: open the menu instead of leaving the page mid-trip */
+function pushBack() { try { history.pushState({ nav: 1 }, ''); } catch (e) { } }
+window.addEventListener('popstate', function () {
+  if (S.screen === 'nav') {
+    if (S.menu) { closeMenu(); } else { openMenu(); }
+    pushBack();
+  } else if (S.screen !== 'home') { show('home'); }
+});
+
+/* ================= wiring ================= */
+$('form').addEventListener('submit', function (e) { e.preventDefault(); go('auto'); });
+$('bDrive').addEventListener('click', function () { go('auto'); });
+$('bWalk').addEventListener('click', function () { go('pedestrian'); });
+$('bLoc').addEventListener('click', askLocation);
+$('bPickBack').addEventListener('click', function () { show('home'); });
+$('nav').addEventListener('click', openMenu);
+$('mResume').addEventListener('click', function (e) { e.stopPropagation(); closeMenu(); });
+$('mVoice').addEventListener('click', function (e) {
+  e.stopPropagation();
+  S.voice = !S.voice; keep('voice', S.voice);
+  if (!S.voice) { try { window.speechSynthesis.cancel(); } catch (x) { } }
+  $('mVoice').textContent = 'Voice: ' + (S.voice ? 'on' : 'off');
+});
+$('mRepeat').addEventListener('click', function (e) { e.stopPropagation(); closeMenu(); repeatDir(); });
+$('mEnd').addEventListener('click', function (e) { e.stopPropagation(); endTrip(); });
+$('bDone').addEventListener('click', function () { endTrip(); });
+$('bRetry').addEventListener('click', function () { if (S.retryFn) { S.retryFn(); } });
+$('bMsgBack').addEventListener('click', function () { endTrip(); });
+
+document.addEventListener('keydown', function (e) {
+  if (S.screen !== 'nav' || S.menu) { return; }
+  if (e.key === '5') { repeatDir(); }
+});
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') {
+    if (S.screen === 'nav' || S.screen === 'arrived') { wakeOn(); }
+    if (S.screen === 'nav') { renderNav(); }
+    if (S.screen === 'home') { renderHome(); }
+  }
+});
+
+/* once a second: GPS-lost check, clock, reroute retry */
+setInterval(function () {
+  if (S.screen === 'nav') {
+    if (!S.route && S.fix && !S.busy && Date.now() - S.routeT > 3000) { requestRoute(false); }
+    if (S.retryAt && Date.now() > S.retryAt && !S.busy) { S.retryAt = 0; S.status = ''; requestRoute(true); }
+    renderNav();
+  } else if (S.screen === 'home') { renderHome(); }
+}, 1000);
+
+/* start */
+if (navigator.permissions && navigator.permissions.query) {
+  navigator.permissions.query({ name: 'geolocation' }).then(function (p) {
+    S.perm = p.state;
+    if (p.state !== 'prompt') { startGPS(); }
+    renderHome();
+    p.onchange = function () { S.perm = p.state; if (p.state === 'granted') { startGPS(); } renderHome(); };
+  }, function () { startGPS(); });
+} else { startGPS(); }
+renderHome();
+renderRecent();
+
+window.__nav = S; /* for testing */
+})();
+</script>
+</body>
+</html>
